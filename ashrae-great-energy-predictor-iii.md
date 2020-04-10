@@ -1,12 +1,17 @@
+# ASHRAE - Great Energy Predictor III
 
 ## Overview
 
-Q: How much does it cost to cool a skyscraper in the summer?
+Q: How much does it cost to cool a skyscraper in the summer?<br>
 A: A lot! And not just in dollars, but in environmental impact.
 
 Thankfully, significant investments are being made to improve building efficiencies to reduce costs and emissions. The question is, are the improvements working? That’s where you come in. Under pay-for-performance financing, the building owner makes payments based on the difference between their real energy consumption and what they would have used without any retrofits. The latter values have to come from a model. Current methods of estimation are fragmented and do not scale well. Some assume a specific meter type or don’t work with different building types.
 
-In this notebook, we will develop accurate models of metered building energy usage in the following areas: chilled water, electric, hot water, and steam meters. The data comes from over 1,000 buildings over a three-year timeframe. With better estimates of these energy-saving investments, large scale investors and financial institutions will be more inclined to invest in this area to enable progress in building efficiencies.
+In this project, we will develop accurate models of metered building energy usage in the following areas: chilled water, electric, hot water, and steam meters. The data comes from over 1,000 buildings over a three-year timeframe. With better estimates of these energy-saving investments, large scale investors and financial institutions will be more inclined to invest in this area to enable progress in building efficiencies.
+
+### About the Host
+
+Founded in 1894, ASHRAE serves to advance the arts and sciences of heating, ventilation, air conditioning refrigeration and their allied fields. ASHRAE members represent building system design and industrial process professionals around the world. With over 54,000 members serving in 132 countries, ASHRAE supports research, standards writing, publishing and continuing education - shaping tomorrow’s built environment today.
 
 ## Data
 
@@ -17,12 +22,14 @@ This challenges you to build these counterfactual models across four energy type
 ## Files
 
 **train.csv**
+
 1. building_id - Foreign key for the building metadata.
 2. meter - The meter id code. Read as {0: electricity, 1: chilledwater, 2: steam, 3: hotwater}. Not every building has all meter types.
 3. timestamp - When the measurement was taken
 4. meter_reading - The target variable. Energy consumption in kWh (or equivalent). Note that this is real data with measurement error, which we expect will impose a baseline level of modeling error.
 
 **building_meta.csv**
+
 1. site_id - Foreign key for the weather files.
 2. building_id - Foreign key for training.csv
 3. primary_use - Indicator of the primary category of activities for the building based on EnergyStar property type definitions
@@ -54,7 +61,6 @@ The submission files use row numbers for ID codes in order to save space on the 
 
 ## So lets begin with complete EDA...
 
-
 ```python
 import numpy as np
 import pandas as pd
@@ -71,10 +77,8 @@ for dirname, _, filenames in os.walk('/kaggle/input'):
     /kaggle/input/ashrae-energy-prediction/weather_test.csv
     /kaggle/input/ashrae-energy-prediction/weather_train.csv
     /kaggle/input/ashrae-energy-prediction/test.csv
-    
 
 ## Load Data
-
 
 ```python
 building_df = pd.read_csv("../input/ashrae-energy-prediction/building_metadata.csv")
@@ -85,12 +89,14 @@ train = pd.read_csv("../input/ashrae-energy-prediction/train.csv")
 ### Features that are likely predictive:
 
 **Buildings**
+
 * primary_use
 * square_feet
 * year_built
 * floor_count (may be too sparse to use)
 
 **Weather**
+
 * time of day
 * holiday
 * weekend
@@ -102,17 +108,17 @@ train = pd.read_csv("../input/ashrae-energy-prediction/train.csv")
 * wind_speed + lags
 
 **Train**
+
 * max, mean, min, std of the specific building historically
 * number of meters
 * number of buildings at a siteid
 
 
+## Data Analysis
+
 ```python
 building_df
 ```
-
-
-
 
 <div>
 <style scoped>
@@ -245,15 +251,9 @@ building_df
 <p>1449 rows × 6 columns</p>
 </div>
 
-
-
-
 ```python
 weather_train
 ```
-
-
-
 
 <div>
 <style scoped>
@@ -422,15 +422,9 @@ weather_train
 <p>139773 rows × 9 columns</p>
 </div>
 
-
-
-
 ```python
 train
 ```
-
-
-
 
 <div>
 <style scoped>
@@ -539,14 +533,12 @@ train
 <p>20216100 rows × 4 columns</p>
 </div>
 
-
-
+### Merging train.csv, building_df.csv and weather_train.csv
 
 ```python
 train = train.merge(building_df, left_on = "building_id", right_on = "building_id", how = "left")
 train = train.merge(weather_train, left_on = ["site_id", "timestamp"], right_on = ["site_id", "timestamp"], how = "left")
 ```
-
 
 ```python
 train["timestamp"] = pd.to_datetime(train["timestamp"])
@@ -556,46 +548,25 @@ train["weekend"] = train["timestamp"].dt.weekday
 train["month"] = train["timestamp"].dt.month
 ```
 
+### Plot between timestamp and meter_reading for site_id = 0
 
 ```python
-# looks like there may be some errors with some of the readings
 train[train["site_id"] == 0].plot("timestamp", "meter_reading")
 ```
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_21_1.png)
 
-
-
-    <matplotlib.axes._subplots.AxesSubplot at 0x7f78b0eb3748>
-
-
-
-
-![png](notebook_files/notebook_21_1.png)
-
-
+### Plot between timestamp and meter_reading for site_id = 2
 
 ```python
 train[train["site_id"] == 2].plot("timestamp", "meter_reading")
 ```
 
-
-
-
-    <matplotlib.axes._subplots.AxesSubplot at 0x7f789b60f470>
-
-
-
-
-![png](notebook_files/notebook_22_1.png)
-
-
+![png](/notebook_files/ashrae-great-energy-predictor-iii_22_1.png)
 
 ```python
 train[["hour", "day", "weekend", "month"]]
 ```
-
-
-
 
 <div>
 <style scoped>
@@ -704,36 +675,26 @@ train[["hour", "day", "weekend", "month"]]
 <p>20216100 rows × 4 columns</p>
 </div>
 
-
-
-
 ```python
 train = train.drop("timestamp", axis = 1)
 ```
 
-
 ```python
 from sklearn.preprocessing import LabelEncoder
 ```
-
 
 ```python
 le = LabelEncoder()
 train["primary_use"] = le.fit_transform(train["primary_use"])
 ```
 
-
 ```python
 categoricals = ["building_id", "primary_use", "hour", "day", "weekend", "month", "meter"]
 ```
 
-
 ```python
 train
 ```
-
-
-
 
 <div>
 <style scoped>
@@ -1022,22 +983,15 @@ train
 <p>20216100 rows × 19 columns</p>
 </div>
 
-
-
-
 ```python
 drop_cols = ["precip_depth_1_hr", "sea_level_pressure", "wind_direction", "wind_speed"]
 numericals = ["square_feet", "year_built", "air_temperature", "cloud_coverage",
               "dew_temperature"]
 ```
 
-
 ```python
 train[categoricals + numericals]
 ```
-
-
-
 
 <div>
 <style scoped>
@@ -1242,20 +1196,13 @@ train[categoricals + numericals]
 <p>20216100 rows × 12 columns</p>
 </div>
 
-
-
-
 ```python
 feat_cols = categoricals + numericals
 ```
 
-
 ```python
 train["meter_reading"].value_counts()
 ```
-
-
-
 
     0.0000       1873976
     20.0000        23363
@@ -1271,8 +1218,6 @@ train["meter_reading"].value_counts()
     Name: meter_reading, Length: 1688175, dtype: int64
 
 
-
-
 ```python
 import matplotlib.pyplot as plt
 top_buildings = train.groupby("building_id")["meter_reading"].mean().sort_values(ascending = False).iloc[:100]
@@ -1281,406 +1226,205 @@ for value in top_buildings.index:
      plt.show()
 ```
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_0.png)
 
-![png](notebook_files/notebook_33_0.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_1.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_2.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_3.png)
 
-![png](notebook_files/notebook_33_1.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_4.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_5.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_6.png)
 
-![png](notebook_files/notebook_33_2.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_7.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_8.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_9.png)
 
-![png](notebook_files/notebook_33_3.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_10.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_11.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_12.png)
 
-![png](notebook_files/notebook_33_4.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_13.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_14.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_15.png)
 
-![png](notebook_files/notebook_33_5.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_16.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_17.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_18.png)
 
-![png](notebook_files/notebook_33_6.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_19.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_20.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_21.png)
 
-![png](notebook_files/notebook_33_7.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_22.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_23.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_24.png)
 
-![png](notebook_files/notebook_33_8.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_25.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_26.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_27.png)
 
-![png](notebook_files/notebook_33_9.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_28.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_29.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_30.png)
 
-![png](notebook_files/notebook_33_10.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_31.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_32.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_33.png)
 
-![png](notebook_files/notebook_33_11.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_34.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_35.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_36.png)
 
-![png](notebook_files/notebook_33_12.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_37.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_38.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_39.png)
 
-![png](notebook_files/notebook_33_13.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_40.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_41.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_42.png)
 
-![png](notebook_files/notebook_33_14.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_43.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_44.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_45.png)
 
-![png](notebook_files/notebook_33_15.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_46.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_47.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_48.png)
 
-![png](notebook_files/notebook_33_16.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_49.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_50.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_51.png)
 
-![png](notebook_files/notebook_33_17.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_52.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_53.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_54.png)
 
-![png](notebook_files/notebook_33_18.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_55.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_56.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_57.png)
 
-![png](notebook_files/notebook_33_19.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_58.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_59.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_60.png)
 
-![png](notebook_files/notebook_33_20.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_61.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_62.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_63.png)
 
-![png](notebook_files/notebook_33_21.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_64.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_65.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_66.png)
 
-![png](notebook_files/notebook_33_22.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_67.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_68.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_69.png)
 
-![png](notebook_files/notebook_33_23.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_70.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_71.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_72.png)
 
-![png](notebook_files/notebook_33_24.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_73.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_74.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_75.png)
 
-![png](notebook_files/notebook_33_25.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_76.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_77.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_78.png)
 
-![png](notebook_files/notebook_33_26.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_79.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_80.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_81.png)
 
-![png](notebook_files/notebook_33_27.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_82.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_83.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_84.png)
 
-![png](notebook_files/notebook_33_28.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_85.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_86.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_87.png)
 
-![png](notebook_files/notebook_33_29.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_88.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_89.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_90.png)
 
-![png](notebook_files/notebook_33_30.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_91.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_92.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_93.png)
 
-![png](notebook_files/notebook_33_31.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_94.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_95.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_96.png)
 
-![png](notebook_files/notebook_33_32.png)
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_97.png)
 
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_98.png)
 
-
-![png](notebook_files/notebook_33_33.png)
-
-
-
-![png](notebook_files/notebook_33_34.png)
-
-
-
-![png](notebook_files/notebook_33_35.png)
-
-
-
-![png](notebook_files/notebook_33_36.png)
-
-
-
-![png](notebook_files/notebook_33_37.png)
-
-
-
-![png](notebook_files/notebook_33_38.png)
-
-
-
-![png](notebook_files/notebook_33_39.png)
-
-
-
-![png](notebook_files/notebook_33_40.png)
-
-
-
-![png](notebook_files/notebook_33_41.png)
-
-
-
-![png](notebook_files/notebook_33_42.png)
-
-
-
-![png](notebook_files/notebook_33_43.png)
-
-
-
-![png](notebook_files/notebook_33_44.png)
-
-
-
-![png](notebook_files/notebook_33_45.png)
-
-
-
-![png](notebook_files/notebook_33_46.png)
-
-
-
-![png](notebook_files/notebook_33_47.png)
-
-
-
-![png](notebook_files/notebook_33_48.png)
-
-
-
-![png](notebook_files/notebook_33_49.png)
-
-
-
-![png](notebook_files/notebook_33_50.png)
-
-
-
-![png](notebook_files/notebook_33_51.png)
-
-
-
-![png](notebook_files/notebook_33_52.png)
-
-
-
-![png](notebook_files/notebook_33_53.png)
-
-
-
-![png](notebook_files/notebook_33_54.png)
-
-
-
-![png](notebook_files/notebook_33_55.png)
-
-
-
-![png](notebook_files/notebook_33_56.png)
-
-
-
-![png](notebook_files/notebook_33_57.png)
-
-
-
-![png](notebook_files/notebook_33_58.png)
-
-
-
-![png](notebook_files/notebook_33_59.png)
-
-
-
-![png](notebook_files/notebook_33_60.png)
-
-
-
-![png](notebook_files/notebook_33_61.png)
-
-
-
-![png](notebook_files/notebook_33_62.png)
-
-
-
-![png](notebook_files/notebook_33_63.png)
-
-
-
-![png](notebook_files/notebook_33_64.png)
-
-
-
-![png](notebook_files/notebook_33_65.png)
-
-
-
-![png](notebook_files/notebook_33_66.png)
-
-
-
-![png](notebook_files/notebook_33_67.png)
-
-
-
-![png](notebook_files/notebook_33_68.png)
-
-
-
-![png](notebook_files/notebook_33_69.png)
-
-
-
-![png](notebook_files/notebook_33_70.png)
-
-
-
-![png](notebook_files/notebook_33_71.png)
-
-
-
-![png](notebook_files/notebook_33_72.png)
-
-
-
-![png](notebook_files/notebook_33_73.png)
-
-
-
-![png](notebook_files/notebook_33_74.png)
-
-
-
-![png](notebook_files/notebook_33_75.png)
-
-
-
-![png](notebook_files/notebook_33_76.png)
-
-
-
-![png](notebook_files/notebook_33_77.png)
-
-
-
-![png](notebook_files/notebook_33_78.png)
-
-
-
-![png](notebook_files/notebook_33_79.png)
-
-
-
-![png](notebook_files/notebook_33_80.png)
-
-
-
-![png](notebook_files/notebook_33_81.png)
-
-
-
-![png](notebook_files/notebook_33_82.png)
-
-
-
-![png](notebook_files/notebook_33_83.png)
-
-
-
-![png](notebook_files/notebook_33_84.png)
-
-
-
-![png](notebook_files/notebook_33_85.png)
-
-
-
-![png](notebook_files/notebook_33_86.png)
-
-
-
-![png](notebook_files/notebook_33_87.png)
-
-
-
-![png](notebook_files/notebook_33_88.png)
-
-
-
-![png](notebook_files/notebook_33_89.png)
-
-
-
-![png](notebook_files/notebook_33_90.png)
-
-
-
-![png](notebook_files/notebook_33_91.png)
-
-
-
-![png](notebook_files/notebook_33_92.png)
-
-
-
-![png](notebook_files/notebook_33_93.png)
-
-
-
-![png](notebook_files/notebook_33_94.png)
-
-
-
-![png](notebook_files/notebook_33_95.png)
-
-
-
-![png](notebook_files/notebook_33_96.png)
-
-
-
-![png](notebook_files/notebook_33_97.png)
-
-
-
-![png](notebook_files/notebook_33_98.png)
-
-
-
-![png](notebook_files/notebook_33_99.png)
-
-
+![png](/notebook_files/ashrae-great-energy-predictor-iii_33_99.png)
 
 ```python
 target = np.log1p(train["meter_reading"])
@@ -1688,13 +1432,9 @@ del train["meter_reading"]
 train = train.drop(drop_cols + ["site_id", "floor_count"], axis = 1)
 ```
 
-
 ```python
 train
 ```
-
-
-
 
 <div>
 <style scoped>
@@ -1899,8 +1639,7 @@ train
 <p>20216100 rows × 12 columns</p>
 </div>
 
-
-
+### Memory Reducing
 
 ```python
 #Based on this great kernel https://www.kaggle.com/arjanso/reducing-dataframe-memory-size-by-65
@@ -1924,13 +1663,13 @@ def reduce_mem_usage(df):
             if not np.isfinite(df[col]).all(): 
                 NAlist.append(col)
                 df[col].fillna(mn-1,inplace=True)  
-                   
+
             # test if column can be converted to an integer
             asint = df[col].fillna(0).astype(np.int64)
             result = (df[col] - asint)
             result = result.sum()
             if result > -0.01 and result < 0.01:
-                IsInt = True            
+                IsInt = True
             # Make Integer/unsigned Integer datatypes
             if IsInt:
                 if mn >= 0:
@@ -1950,11 +1689,11 @@ def reduce_mem_usage(df):
                     elif mn > np.iinfo(np.int32).min and mx < np.iinfo(np.int32).max:
                         df[col] = df[col].astype(np.int32)
                     elif mn > np.iinfo(np.int64).min and mx < np.iinfo(np.int64).max:
-                        df[col] = df[col].astype(np.int64)    
+                        df[col] = df[col].astype(np.int64)
             # Make float datatypes 32 bit
             else:
                 df[col] = df[col].astype(np.float32)
-            
+
             # Print new column type
             print("dtype after: ",df[col].dtype)
             print("******************************")
@@ -1965,7 +1704,6 @@ def reduce_mem_usage(df):
     print("This is ",100*mem_usg/start_mem_usg,"% of the initial size")
     return df, NAlist
 ```
-
 
 ```python
 train, NAlist = reduce_mem_usage(train)
@@ -2059,10 +1797,8 @@ train, NAlist = reduce_mem_usage(train)
     ___MEMORY USAGE AFTER COMPLETION:___
     Memory usage is:  597.6668357849121  MB
     This is  29.807692307692307 % of the initial size
-    
 
 ## LightGBM
-
 
 ```python
 from sklearn.model_selection import KFold
@@ -2097,7 +1833,7 @@ for i, (train_index, val_index) in enumerate(kf.split(train)):
                 valid_sets=(lgb_train, lgb_eval),
                early_stopping_rounds=20,
                verbose_eval = 20)
-    
+
     lgb_train = lgb.Dataset(train_X[train_y > 0], train_y[train_y > 0])
     lgb_eval = lgb.Dataset(val_X[val_y > 0] , val_y[val_y > 0])
     params = {
@@ -2115,7 +1851,6 @@ for i, (train_index, val_index) in enumerate(kf.split(train)):
                 valid_sets=(lgb_train, lgb_eval),
                early_stopping_rounds=20,
                verbose_eval = 20)
-#     models.append(gbm)
 
     y_pred = (gbm_class.predict(val_X, num_iteration=gbm_class.best_iteration) > .5) *\
     (gbm_regress.predict(val_X, num_iteration=gbm_regress.best_iteration))
@@ -2155,31 +1890,23 @@ print(error)
     [323]	training's rmse: 0.485635	valid_1's rmse: 0.690325
     1.3222083934671207
     0.26444167869342416
-    
-
 
 ```python
 sorted(zip(gbm_regress.feature_importance(), gbm_regress.feature_name()),reverse = True)
 ```
 
-
-
-
-    [(2349, 'building_id'),
-     (2111, 'square_feet'),
-     (1085, 'meter'),
-     (803, 'primary_use'),
-     (767, 'year_built'),
-     (740, 'month'),
-     (680, 'hour'),
-     (514, 'air_temperature'),
-     (253, 'dew_temperature'),
-     (205, 'weekend'),
-     (158, 'day'),
-     (25, 'cloud_coverage')]
-
-
-
+> [(2349, 'building_id'),
+> (2111, 'square_feet'),
+> (1085, 'meter'),
+> (803, 'primary_use'),
+> (767, 'year_built'),
+> (740, 'month'),
+> (680, 'hour'),
+> (514, 'air_temperature'),
+> (253, 'dew_temperature'),
+> (205, 'weekend'),
+> (158, 'day'),
+> (25, 'cloud_coverage')]
 
 ```python
 import gc
@@ -2187,41 +1914,26 @@ del train
 del train_X, val_X, lgb_train, lgb_eval, train_y, val_y, y_pred, target
 ```
 
-
 ```python
 gc.collect()
 ```
 
+> 7550
 
-
-
-    7550
-
-
-
+### Preparing test data
 
 ```python
-#preparing test data
+
 test = pd.read_csv("../input/ashrae-energy-prediction/test.csv")
 test = test.merge(building_df, left_on = "building_id", right_on = "building_id", how = "left")
 del building_df
 gc.collect()
 ```
-
-
-
-
-    0
-
-
-
+> 0
 
 ```python
 test
 ```
-
-
-
 
 <div>
 <style scoped>
@@ -2390,13 +2102,9 @@ test
 <p>41697600 rows × 9 columns</p>
 </div>
 
-
-
-
 ```python
 test["primary_use"] = le.transform(test["primary_use"])
 ```
-
 
 ```python
 test, NAlist = reduce_mem_usage(test)
@@ -2462,15 +2170,10 @@ test, NAlist = reduce_mem_usage(test)
     ___MEMORY USAGE AFTER COMPLETION:___
     Memory usage is:  1272.509765625  MB
     This is  40.0 % of the initial size
-    
-
 
 ```python
 test
 ```
-
-
-
 
 <div>
 <style scoped>
@@ -2639,33 +2342,20 @@ test
 <p>41697600 rows × 9 columns</p>
 </div>
 
-
-
-
 ```python
 gc.collect()
 ```
 
-
-
-
-    0
-
-
-
+> 0
 
 ```python
 weather_test = pd.read_csv("../input/ashrae-energy-prediction/weather_test.csv")
 weather_test = weather_test.drop(drop_cols, axis = 1)
 ```
 
-
 ```python
 weather_test
 ```
-
-
-
 
 <div>
 <style scoped>
@@ -2786,14 +2476,10 @@ weather_test
 <p>277243 rows × 5 columns</p>
 </div>
 
-
-
-
 ```python
 test = test.merge(weather_test, left_on = ["site_id", "timestamp"], right_on = ["site_id", "timestamp"], how = "left")
 del weather_test
 ```
-
 
 ```python
 test["timestamp"] = pd.to_datetime(test["timestamp"])
@@ -2804,21 +2490,19 @@ test["month"] = test["timestamp"].dt.month.astype(np.uint8)
 test = test[feat_cols]
 ```
 
-
 ```python
 from tqdm import tqdm
 i=0
 res=[]
 step_size = 50000
 for j in tqdm(range(int(np.ceil(test.shape[0]/50000)))):
-    
+
     res.append(np.expm1((gbm_class.predict(test.iloc[i:i+step_size], num_iteration=gbm_class.best_iteration) > .5) *\
     (gbm_regress.predict(test.iloc[i:i+step_size], num_iteration=gbm_regress.best_iteration))))
     i+=step_size
 ```
 
-    100%|██████████| 834/834 [07:07<00:00,  1.95it/s]
-    
+> 100%|██████████| 834/834 [07:07<00:00,  1.95it/s]
 
 
 ```python
@@ -2826,13 +2510,9 @@ del test
 res = np.concatenate(res)
 ```
 
-
 ```python
 pd.DataFrame(res).describe()
 ```
-
-
-
 
 <div>
 <style scoped>
@@ -2892,20 +2572,13 @@ pd.DataFrame(res).describe()
 </table>
 </div>
 
-
-
-
 ```python
 res.shape
 ```
 
+> (41697600,)
 
-
-
-    (41697600,)
-
-
-
+## Submission
 
 ```python
 sub = pd.read_csv("../input/ashrae-energy-prediction/sample_submission.csv")
